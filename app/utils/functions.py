@@ -1372,34 +1372,29 @@ async def filter_students_by_class(file_path: str, classes: List[str]) -> str:
 
 
 async def setup_llamafile_with_ngrok(
-    model_name: str = "Llama-3.2-1B-Instruct.Q6_K.llamafile",
-) -> str:
+    model_name: str = "Llama-3.2-1B-Instruct.Q6_K.llamafile", csv_file: str = "models.csv") -> str:
     """
-    Generate instructions for setting up Llamafile with ngrok.
+    Fetch the URL for the given model from a CSV file.
+    This assumes that the corresponding models are already hosted.
     Args:
-        model_name: Name of the Llamafile model
+        model_name: Name of the model to look up.
+        csv_file: Path to the CSV file containing model names and URLs.
 
     Returns:
-        Setup instructions
+        The corresponding URL if found, otherwise a default fallback URL.
     """
+    fallback_url = "https://snapper-optimum-bobcat.ngrok-free.app"
+    
     try:
-         # Get the active ngrok tunnel URL
-        result = subprocess.run(["curl", "-s", "http://127.0.0.1:8080/api/tunnels"], capture_output=True, text=True)
-        tunnels = json.loads(result.stdout)
-        ngrok_url = tunnels["tunnels"][0]["public_url"] if tunnels["tunnels"] else "No active tunnel found"
-        # Generate instructions
-        instructions = f"""# Llamafile with ngrok Setup Instructions
-    - Download Llamafile from https://github.com/Mozilla-Ocho/llamafile/releases
-- Download the {model_name} model
-- Make the llamafile executable: chmod +x {model_name}
-- Run the model: ./{model_name}
-- Install ngrok: https://ngrok.com/download
-- Create a tunnel: ngrok http 8080
-- Your ngrok URL will be displayed in the terminal
-"""
-        return instructions
-    except Exception as e:
-        return f"Error generating Llamafile setup instructions: {str(e)}"
+        with open(csv_file, mode='r', encoding='utf-8') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                if row.get("model_name") == model_name:
+                    return row.get("url", fallback_url)
+    except (FileNotFoundError, KeyError, Exception):
+        pass  # Handle any errors by returning the fallback URL
+    
+    return fallback_url
 
 
 async def analyze_sentiment(text: str, api_key: str = "api_key") -> str:
@@ -1410,11 +1405,12 @@ async def analyze_sentiment(text: str, api_key: str = "api_key") -> str:
     import json
 
     url = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
-    API_KEY = os.getenv("AIPROXY_TOKEN")  
-    if not API_KEY:
+    AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")  
+    if not AIPROXY_TOKEN:
         return "Error: Missing AIPROXY_TOKEN in environment variables."
 
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {API_KEY}"}
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {AIPROXY_TOKEN}"}
+    # Prepare the payload for the API request
 
     payload = {
         "model": "gpt-4o-mini",
@@ -1587,13 +1583,19 @@ async def count_cricket_ducks(page_number: int = 3) -> str:
         import pandas as pd
         import httpx
         from bs4 import BeautifulSoup
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://stats.espncricinfo.com/",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
 
         # Construct the URL for the specified page
         url = f"https://stats.espncricinfo.com/ci/engine/stats/index.html?class=2;page={page_number};template=results;type=batting"
 
         # Fetch the page content
         async with httpx.AsyncClient() as client:
-            response = await client.get(url)
+            response = await client.get(url, headers=headers)
             response.raise_for_status()
             html_content = response.text
 
