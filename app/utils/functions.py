@@ -318,7 +318,7 @@ async def convert_keyvalue_to_json(file_path: str) -> str:
         json_result = json.dumps(result_dict, separators=(",", ":"))
 
         # Check if this is the multi-cursor JSON hash question
-        if "multi-cursor" in file_path.lower() and "jsonhash" in question.lower():
+        if "multi-cursor" in file_path.lower() and "jsonhash" in file_path.lower():
             # Try to get the hash directly from the API
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
@@ -1383,6 +1383,10 @@ async def setup_llamafile_with_ngrok(
         Setup instructions
     """
     try:
+         # Get the active ngrok tunnel URL
+        result = subprocess.run(["curl", "-s", "http://127.0.0.1:8080/api/tunnels"], capture_output=True, text=True)
+        tunnels = json.loads(result.stdout)
+        ngrok_url = tunnels["tunnels"][0]["public_url"] if tunnels["tunnels"] else "No active tunnel found"
         # Generate instructions
         instructions = f"""# Llamafile with ngrok Setup Instructions
     - Download Llamafile from https://github.com/Mozilla-Ocho/llamafile/releases
@@ -1398,16 +1402,19 @@ async def setup_llamafile_with_ngrok(
         return f"Error generating Llamafile setup instructions: {str(e)}"
 
 
-async def analyze_sentiment(text: str, api_key: str = "dummy_api_key") -> str:
+async def analyze_sentiment(text: str, api_key: str = "api_key") -> str:
     """
     Analyze sentiment of text using OpenAI API
     """
     import httpx
     import json
 
-    url = "https://api.openai.com/v1/chat/completions"
+    url = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+    API_KEY = os.getenv("AIPROXY_TOKEN")  
+    if not API_KEY:
+        return "Error: Missing AIPROXY_TOKEN in environment variables."
 
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {API_KEY}"}
 
     payload = {
         "model": "gpt-4o-mini",
@@ -1453,11 +1460,16 @@ async def count_tokens(text: str) -> str:
     import httpx
     import json
 
-    url = "https://api.openai.com/v1/chat/completions"
+    url = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+    # Retrieve API key from .env
+    AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")  
+    if not AIPROXY_TOKEN:
+        return "Error: Missing AIPROXY_TOKEN in environment variables."
+
 
     headers = {
         "Content-Type": "application/json",
-        "Authorization": "Bearer dummy_api_key",
+        "Authorization": f"Bearer {AIPROXY_TOKEN}",
     }
 
     payload = {
@@ -1644,7 +1656,7 @@ The total number of ducks across all players on page {page_number} is: **{total_
 
 
 async def get_imdb_movies(
-    min_rating: float = 7.0, max_rating: float = 8.0, limit: int = 25
+    min_rating: float = 2.0, max_rating: float = 4.0, limit: int = 25
 ) -> str:
     """
     Get movie information from IMDb with ratings in a specific range
@@ -1906,16 +1918,20 @@ async def generate_vision_api_request(image_url: str) -> str:
     """
     try:
         import json
+        import base64
 
         # Create the request body
+        with open(image_url, "rb") as image_file:
+            base64_image = base64.b64encode(image_file.read()).decode("utf-8")
         request_body = {
             "model": "gpt-4o-mini",
+            # "data:image/png;base64," + base64_image
             "messages": [
                 {
                     "role": "user",
                     "content": [
                         {"type": "text", "text": "Extract text from this image."},
-                        {"type": "image_url", "image_url": {"url": image_url}},
+                        {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64_image}},   
                     ],
                 }
             ],
@@ -1999,6 +2015,7 @@ async def find_most_similar_phrases(embeddings_dict: Dict[str, List[float]]) -> 
     try:
         import numpy as np
         from itertools import combinations
+        from typing import Dict, List, Tuple
 
         # Function to calculate cosine similarity
         def cosine_similarity(vec1, vec2):
@@ -2022,8 +2039,8 @@ async def find_most_similar_phrases(embeddings_dict: Dict[str, List[float]]) -> 
                 most_similar_pair = (phrases[i], phrases[j])
 
         # Generate Python code for the solution
-        solution_code = """
-def most_similar(embeddings):
+        solution_code = f"""
+def most_similar(embeddings: Dict[str, List[float]]) -> Tuple[str, str]:
     \"\"\"
     Find the most similar pair of phrases based on cosine similarity of their embeddings.
     
@@ -2112,7 +2129,7 @@ async def compute_document_similarity(docs: List[str], query: str) -> str:
             url = "https://api.openai.com/v1/embeddings"
             headers = {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer dummy_api_key",  # Replace with actual API key in production
+                "Authorization": "AIPROXY_TOKEN",  # Replace with actual API key in production
             }
             payload = {"model": "text-embedding-3-small", "input": text}
 
@@ -2183,7 +2200,7 @@ async def compute_similarity(request: SimilarityRequest):
         url = "https://api.openai.com/v1/embeddings"
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {OPENAI_API_KEY}"  # Use environment variable
+            "Authorization": f"Bearer {AIPROXY_TOKEN}",  # Replace with actual API key in production, or use environment variable: f"Bearer {OPENAI_API_KEY}"  # Use environment variable
         }
         payload = {
             "model": "text-embedding-3-small",
@@ -2414,27 +2431,33 @@ GET http://127.0.0.1:8000/execute?q={query.replace(" ", "%20")}
 """
     except Exception as e:
         return f"Error parsing function call: {str(e)}"
+    
+import httpx
+import json
+import asyncio
+import nest_asyncio
+
+nest_asyncio.apply()# Make sure this import is present
 
 
-async def get_delhi_bounding_box() -> str:
+async def get_istanbul_bounding_box() -> str:
     """
-    Get the minimum latitude of Delhi, India using the Nominatim API
+    Get the minimum latitude of Istanbul, Turkey using the Nominatim API
 
     Returns:
-        Information about Delhi's bounding box
+        Information about Istanbul bounding box
     """
     try:
-        import httpx
-        import json
-        import asyncio  # Make sure this import is present
+        
+        nest_asyncio.apply()# Make sure this import is present
 
         # Nominatim API endpoint
         url = "https://nominatim.openstreetmap.org/search"
 
         # Parameters for the request
         params = {
-            "city": "Delhi",
-            "country": "India",
+            "city": "Istanbul",
+            "country": "Turkey",
             "format": "json",
             "limit": 10,  # Get multiple results to ensure we find the right one
         }
@@ -2449,33 +2472,25 @@ async def get_delhi_bounding_box() -> str:
             # Make the request
             response = await client.get(url, params=params, headers=headers)
             response.raise_for_status()
-            results = response.json()
+            results = await response.json()
 
             if not results:
-                return "No results found for Delhi, India"
+                return "No results found for Istanbul, Turkey"
 
-            # Find the correct Delhi (capital city)
-            delhi = None
-            for result in results:
-                if "New Delhi" in result.get("display_name", ""):
-                    delhi = result
-                    break
-
-            # If we didn't find New Delhi specifically, use the first result
-            if not delhi and results:
-                delhi = results[0]
-
-            if delhi and "boundingbox" in delhi:
+            # Find the correct Istanbul 
+            istanbul = results[0]
+            # Check if bounding box information is available
+            if "boundingbox" in istanbul:
                 # Extract the minimum latitude from the bounding box
-                min_lat = delhi["boundingbox"][0]
+                min_lat = istanbul["boundingbox"][0]
 
                 # Return just the minimum latitude value
                 return min_lat
             else:
-                return "Bounding box information not available for Delhi"
+                return "Bounding box information not available for Istanbul"
 
     except Exception as e:
-        return f"Error retrieving Delhi bounding box: {str(e)}"
+        return f"Error retrieving Istanbul bounding box: {str(e)}"
 
 
 async def find_duckdb_hn_post() -> str:

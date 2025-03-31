@@ -689,8 +689,8 @@ async def get_openai_response(question: str, file_path: Optional[str] = None) ->
         {
             "type": "function",
             "function": {
-                "name": "get_delhi_bounding_box",
-                "description": "Get the minimum latitude of Delhi, India using the Nominatim API",
+                "name": "get_istanbul_bounding_box",
+                "description": "Get the minimum latitude of Istanbul, Turkey using the Nominatim API",
                 "parameters": {
                     "type": "object",
                     "properties": {},
@@ -1120,7 +1120,7 @@ async def get_openai_response(question: str, file_path: Optional[str] = None) ->
                 elif function_name == "make_api_request":
                     answer = await make_api_request(
                         url=function_args.get("url"),
-                        method=function_args.get("method"),
+                        method=function_args.get("method","GET").upper(),
                         headers=function_args.get("headers"),
                         data=function_args.get("data"),
                     )
@@ -1221,7 +1221,7 @@ async def get_openai_response(question: str, file_path: Optional[str] = None) ->
                 elif function_name == "analyze_sentiment":
                     answer = await analyze_sentiment(
                         text=function_args.get("text"),
-                        api_key=function_args.get("api_key", "dummy_api_key"),
+                        api_key=function_args.get("api_key", "api_key"),
                     )
 
                 elif function_name == "count_tokens":
@@ -1236,13 +1236,13 @@ async def get_openai_response(question: str, file_path: Optional[str] = None) ->
                     )
                 elif function_name == "count_cricket_ducks":
                     answer = await count_cricket_ducks(
-                        page_number=function_args.get("page_number", 3),
+                        page_number=function_args.get("page_number", 19),
                     )
 
                 elif function_name == "get_imdb_movies":
                     answer = await get_imdb_movies(
-                        min_rating=function_args.get("min_rating", 7.0),
-                        max_rating=function_args.get("max_rating", 8.0),
+                        min_rating=function_args.get("min_rating", 2.0),
+                        max_rating=function_args.get("max_rating", 4.0),
                         limit=function_args.get("limit", 25),
                     )
 
@@ -1280,7 +1280,7 @@ async def get_openai_response(question: str, file_path: Optional[str] = None) ->
                         query=function_args.get("query", ""),
                     )
                 elif function_name == "get_delhi_bounding_box":
-                    answer = await get_delhi_bounding_box()
+                    answer = await get_istanbul_bounding_box()
 
                 elif function_name == "find_duckdb_hn_post":
                     answer = await find_duckdb_hn_post()
