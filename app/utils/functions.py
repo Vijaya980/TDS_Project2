@@ -1,5 +1,6 @@
 import os
 import zipfile
+from bs4 import BeautifulSoup
 import pandas as pd
 import httpx
 import json
@@ -15,7 +16,44 @@ import json
 import csv
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+from playwright.async_api import async_playwright
+import random
+from pathlib import Path
 
+async def get_html(url):
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.google.com/",
+        }
+        await page.set_extra_http_headers(headers)
+
+
+        # Open IMDb main page first
+        await page.goto("https://www.imdb.com", timeout=60000)
+        # Add a realistic random delay
+        delay = max(1000, int(random.gauss(5000, 1000)))
+        await page.wait_for_timeout(delay)
+
+        # Open IMDb main page first
+        await page.goto("https://www.imdb.com/chart/top", timeout=60000)
+        # Add a realistic random delay
+        delay = max(1000, int(random.gauss(5000, 1000)))
+        await page.wait_for_timeout(delay)
+
+        # Now go to the real target page
+        await page.goto(url, timeout=60000)
+
+        html = await page.content()
+        await browser.close()
+        return html
 
 async def calculate_statistics(file_path: str, operation: str, column_name: str) -> str:
     """
@@ -1657,6 +1695,47 @@ The total number of ducks across all players on page {page_number} is: **{total_
         return f"Error counting cricket ducks: {str(e)}"
 
 
+def extract_movies(html_content, limit=None):
+    soup = BeautifulSoup(html_content, "html.parser")
+    # Find movie containers (each movie is in a div with class "lister-item-content")
+    movie_items = soup.find_all("li", class_="ipc-metadata-list-summary-item")
+    print(f"Found {len(movie_items)} movies")
+    movies = []
+    for item in movie_items:
+        try:
+            # Extract movie title
+            title_element = item.select_one(".ipc-title a")
+            title = title_element.get_text(strip=True) if title_element else "Unknown"
+            # strip the serial number from the title
+            title = re.sub(r"^\d+\.\s*", "", title)
+
+            # Extract movie ID from the href link
+            href = title_element["href"] if title_element and "href" in title_element.attrs else ""
+            movie_id_match = re.search(r"/title/(tt\d+)/", href)
+            movie_id = movie_id_match.group(1) if movie_id_match else "N/A"
+
+            # Extract year
+            year_element = soup.select_one(".dli-title-metadata span")
+            year_text = year_element.get_text(strip=True) if year_element else "Unknown"
+            year_match = re.search(r"\d{4}", year_text)
+            year = year_match.group(0) if year_match else "N/A"
+
+            # Extract IMDb rating
+            rating_element = soup.select_one("[data-testid='ratingGroup--imdb-rating'] .ipc-rating-star--rating")
+            rating = rating_element.get_text(strip=True) if rating_element else "N/A"
+
+            movies.append( {"id": movie_id, "title": title, "year": year, "rating": rating})
+
+            # break if movie limit is reached
+            if limit and len(movies) >= limit:
+                break
+        
+        except Exception as e:
+            print(f"Error extracting movie details: {e}")
+            continue
+
+    return movies
+
 async def get_imdb_movies(
     min_rating: float = 2.0, max_rating: float = 4.0, limit: int = 25
 ) -> str:
@@ -1679,17 +1758,8 @@ async def get_imdb_movies(
 
         # Construct the URL with the rating filter
         url = f"https://www.imdb.com/search/title/?title_type=feature&user_rating={min_rating},{max_rating}&sort=user_rating,desc"
-
-        # Set headers to mimic a browser request
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-
-        # Fetch the page content
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, headers=headers)
-            response.raise_for_status()
-            html_content = response.text
+        html_content = await get_html(url)
+        print(html_content)
 
         # Parse the HTML
         soup = BeautifulSoup(html_content, "html.parser")
@@ -1698,33 +1768,7 @@ async def get_imdb_movies(
         movie_items = soup.find_all("div", class_="lister-item-content")
 
         # Extract movie data
-        movies = []
-        for item in movie_items[:limit]:
-            # Get the movie title and year
-            title_element = item.find("h3", class_="lister-item-header").find("a")
-            title = title_element.get_text(strip=True)
-
-            # Extract the movie ID from the href attribute
-            href = title_element.get("href", "")
-            id_match = re.search(r"/title/(tt\d+)/", href)
-            movie_id = id_match.group(1) if id_match else ""
-
-            # Extract the year
-            year_element = item.find("span", class_="lister-item-year")
-            year_text = year_element.get_text(strip=True) if year_element else ""
-            year_match = re.search(r"\((\d{4})\)", year_text)
-            year = year_match.group(1) if year_match else ""
-
-            # Extract the rating
-            rating_element = item.find("div", class_="ratings-imdb-rating")
-            rating = rating_element.get("data-value", "") if rating_element else ""
-
-            # Add to the movies list
-            if movie_id and title:
-                movies.append(
-                    {"id": movie_id, "title": title, "year": year, "rating": rating}
-                )
-
+        movies = extract_movies(html_content, limit)
         # Convert to JSON
         movies_json = json.dumps(movies, indent=2)
 
@@ -4099,5 +4143,4 @@ async def analyze_sales_with_phonetic_clustering(
 
     except Exception as e:
         import traceback
-
         return f"Error analyzing sales data: {str(e)}\n{traceback.format_exc()}"
