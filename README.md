@@ -10,8 +10,9 @@ This API automatically answers questions from graded assignments for the IIT Mad
    - Windows: `venv\Scripts\activate`
    - Unix/MacOS: `source venv/bin/activate`
 4. Install dependencies: `pip install -r requirements.txt`
-5. Create a `.env` file with your `AIPROXY_TOKEN`
-6. Run the server: `uvicorn app.main:app --reload`
+5. Install Playwright: `playwright install`
+6. Create a `.env` file with your `AIPROXY_TOKEN`
+7. Run the server: `uvicorn app.main:app --reload`
 
 ## Usage
 

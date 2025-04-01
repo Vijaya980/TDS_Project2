@@ -24,37 +24,6 @@ from playwright.async_api import async_playwright
 import random
 from pathlib import Path
 
-async def get_html(url):
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://www.google.com/",
-        }
-        await page.set_extra_http_headers(headers)
-
-
-        # Open IMDb main page first
-        await page.goto("https://www.imdb.com", timeout=60000)
-        # Add a realistic random delay
-        delay = max(1000, int(random.gauss(5000, 1000)))
-        await page.wait_for_timeout(delay)
-
-        # Open IMDb main page first
-        await page.goto("https://www.imdb.com/chart/top", timeout=60000)
-        # Add a realistic random delay
-        delay = max(1000, int(random.gauss(5000, 1000)))
-        await page.wait_for_timeout(delay)
-
-        # Now go to the real target page
-        await page.goto(url, timeout=60000)
-
-        html = await page.content()
-        await browser.close()
-        return html
-
 async def calculate_statistics(file_path: str, operation: str, column_name: str) -> str:
     """
     Calculate statistics from a CSV file.
@@ -1694,6 +1663,36 @@ The total number of ducks across all players on page {page_number} is: **{total_
     except Exception as e:
         return f"Error counting cricket ducks: {str(e)}"
 
+async def get_imdb_html(url):
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.google.com/",
+        }
+        await page.set_extra_http_headers(headers)
+
+
+        # Open IMDb main page first
+        await page.goto("https://www.imdb.com", timeout=60000)
+        # Add a realistic random delay
+        delay = max(1000, int(random.gauss(5000, 1000)))
+        await page.wait_for_timeout(delay)
+
+        # Open IMDb main page first
+        await page.goto("https://www.imdb.com/chart/top", timeout=60000)
+        # Add a realistic random delay
+        delay = max(1000, int(random.gauss(5000, 1000)))
+        await page.wait_for_timeout(delay)
+
+        # Now go to the real target page
+        await page.goto(url, timeout=60000)
+
+        html = await page.content()
+        await browser.close()
+        return html
 
 def extract_movies(html_content, limit=None):
     soup = BeautifulSoup(html_content, "html.parser")
@@ -1758,7 +1757,7 @@ async def get_imdb_movies(
 
         # Construct the URL with the rating filter
         url = f"https://www.imdb.com/search/title/?title_type=feature&user_rating={min_rating},{max_rating}&sort=user_rating,desc"
-        html_content = await get_html(url)
+        html_content = await get_imdb_html(url)
         print(html_content)
 
         # Parse the HTML
